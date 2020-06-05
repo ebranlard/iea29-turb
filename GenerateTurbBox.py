@@ -9,18 +9,21 @@ import pickle
 
 
 # ---- Parameters
-con_file = '35Hz_data/A1_pyConTurb_tc.csv'
-out_file = 'A1.pkl'
+Case='A1'
 ymin,ymax = -198,198
 zmin,zmax = 3,198
-ny = 133 # TODO 133
-nz = 66  # TODO 66
-h_hub=57;
+ny = 133 # 133 # TODO 133
+nz = 66  # 66  # TODO 66
 
+# --- Constants and derived params
+h_hub=57;
 x_refPoints=np.array(3*[293.9])
 y_refPoints=np.array(3*[107.1])
 z_refPoints=np.array([17,57,93])
-
+pkl_file = '{}.pkl'.format(Case)
+pkl_space = '{}_space.pkl'.format(Case)
+box_file = '{}.bts'.format(Case)
+con_file = '35Hz_data/{}_pyConTurb_tc.csv'.format(Case)
 
  ## Constraining time series
 con_tc = TimeConstraint(pd.read_csv(con_file, index_col=0))  # load data from csv directly into tc
@@ -32,6 +35,7 @@ time_df = con_tc.get_time()
 dt      = con_tc.get_time().index[1]
 T       = con_tc.get_T()-dt          # TODO
 u_ref=time_df['u_p1'].mean()
+print('>>> Pkl : {}Mb'.format(0.14*ny*nz))
 print('>>> T, dt:',T,dt)
 print('>>> u_ref:',u_ref)
 
@@ -62,6 +66,7 @@ interp_data = 'none'  # use the default IEC 61400-1 profile instead of interpola
 
 # This function below generates the actual spatial data. It assumes we want all three turbulence components at each spatial location.
 spat_df = gen_spat_grid(y, z)  # create our spatial pandas dataframe. Columns are k, p_id x, y, and z.
+pickle.dump(spat_df, open(pkl_space,'wb'))
 
 # plt.scatter(spat_df.loc['y'], spat_df.loc['z'], label='sim. grid')
 # plt.plot(con_tc.iloc[2, :6], con_tc.iloc[3, :6], 'rX', label='constraint')
@@ -70,32 +75,16 @@ spat_df = gen_spat_grid(y, z)  # create our spatial pandas dataframe. Columns ar
 
 #---  Generate constrained turbulence
 # We now pass our constraint object and other arguments into `gen_turb` as follows.
-sim_turb_df = gen_turb(spat_df, con_tc=con_tc, interp_data=interp_data, verbose=True, **kwargs)
-
-pickle.dump(sim_turb_df, open(out_file,'wb'))
-
-
-# As a sanity check, let's compare a simulated point that is close to a constraint point. If we did this right, they should look similar to each other.
-# find the points close to where we want to look
-yloc, zloc = y_refPoints[1], y_refPoints[2]  # location we want to compare
-isim = np.argmin((spat_df.loc['y'].values - yloc)**2+(spat_df.loc['z'].values - zloc)**2)
-icon = np.argmin((con_tc.loc['y'].values - yloc)**2+(con_tc.loc['z'].values - zloc)**2)
-t, usim, ucon = sim_turb_df.index, sim_turb_df.iloc[:, isim], con_tc.get_time().iloc[:, icon]
-# plot the time series
-plt.plot(t, usim, label='simulated')
-plt.plot(t, ucon, 'r', label='constraint')
-plt.legend();
-
-# Let's also check out statistics of $u$ by height:
-stats = sim_turb_df.filter(regex='u_', axis=1).describe().loc[['mean', 'std']]
-# plot
-plt.clf(); plt.subplot(1, 2, 1);
-plt.scatter(stats.loc['mean'], spat_df.filter(regex='u_').loc['z'], label='Mean profile')
-plt.legend()
-plt.subplot(1, 2, 2)
-plt.scatter(stats.loc['std'], spat_df.filter(regex='u_').loc['z'], label='Std dev')
-plt.legend();
-
+sim_turb_df = gen_turb(spat_df, con_tc=con_tc, interp_data=interp_data, seed=12, verbose=True, **kwargs)
+pickle.dump(sim_turb_df, open(pkl_file,'wb'))
 
 
 # **Note**: The profile functions selected for the wind speed, turbulence standard deviation and power spectra affect whether you regenerate the constraining data if a simulation point is collocated. One option is to use the built-in profile functions that interpolates these profiles from your data (see related example in the documentation). Otherwise, you can define your own profile functions for custom interpolation.
+
+# For a rotor diameter of ≈80 m, a maximum chord of ≈3 m, and a wind speed of ≈8 m/s, the rules of thumb for convergence of FAST.Farm would suggest the following discretization requirements for the ambient wind field:
+# •	Spatial resolution around rotor ≤ 3 m
+# •	Time step around rotor ≤ 0.1 s
+# •	Spatial resolution for meandering (away from the rotor) ≤ 8 m
+# •	Time step for meandering (away from the rotor) ≤ 2 s
+# 
+# Based on these results, it would be easiest for us if there was one Mann box with uniform spatial-temporal resolution of ≈3 m and ≈0.1 s.  But we could probably make do (with a bit of data conversion) if you provided two boxes based on the above discretization requirements.  To ensure that it is big enough to capture wake meandering, the larger box (or one large box) should probably be around 6D (480 m) wide and 3D (240 m) tall.

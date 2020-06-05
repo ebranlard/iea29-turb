@@ -3,5 +3,7 @@
 *.tim
 *.png
 *.pdf
+*.tmp
+*.pkl
 con_tc.csv
 turb_gen/
