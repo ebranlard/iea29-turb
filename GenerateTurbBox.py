@@ -11,12 +11,11 @@ import pickle
 # ---- Parameters
 con_file = '35Hz_data/A1_pyConTurb_tc.csv'
 out_file = 'A1.pkl'
-ymin,ymax = -240,240
-zmin,zmax = 0,240
-ny = 160 # TODO 160
-nz = 80 # TODO 80
+ymin,ymax = -198,198
+zmin,zmax = 3,198
+ny = 133 # TODO 133
+nz = 66  # TODO 66
 h_hub=57;
-u_ref=8.42;
 
 x_refPoints=np.array(3*[293.9])
 y_refPoints=np.array(3*[107.1])
@@ -29,9 +28,12 @@ con_tc.index = con_tc.index.map(lambda x: float(x) if (x not in 'kxyz') else x) 
 # con_tc.iloc[:7, :]  # look at the first 7 rows
 # con_tc.get_spat()
 # con_tc.get_time().iloc[:5, :8]
-dt = con_tc.get_time().index[1]
-T  = con_tc.get_T()-dt # TODO
-print('>>>',T,dt)
+time_df = con_tc.get_time()
+dt      = con_tc.get_time().index[1]
+T       = con_tc.get_T()-dt          # TODO
+u_ref=time_df['u_p1'].mean()
+print('>>> T, dt:',T,dt)
+print('>>> u_ref:',u_ref)
 
 
 # We can plot the points to visualize the locations of the constrainting points in space.
@@ -41,7 +43,6 @@ print('>>>',T,dt)
 
 
 # Now let's visualize the constraining time series.
-# time_df = con_tc.get_time()
 # ax = time_df.filter(regex='u_', axis=1).plot(lw=0.75)  # subselect long. wind component
 # ax.set_ylabel('longitudinal wind speed [m/s]');
 # [print(x) for x in time_df.filter(regex='u_', axis=1).mean()];  # print mean values
@@ -53,6 +54,8 @@ print('>>>',T,dt)
 
 y = np.linspace(ymin,ymax, ny)  # lateral components of turbulent grid
 z = np.linspace(zmin,zmax, nz)  # vertical components of turbulent grid
+print('y:',y)
+print('z:',z)
 kwargs = {'u_ref': u_ref, 'turb_class': 'B', 'z_hub': h_hub,  # necessary keyword arguments for IEC turbulence
           'T': con_tc.get_T(), 'dt': con_tc.get_time().index[1]}  # simulation length (s) and time step (s)
 interp_data = 'none'  # use the default IEC 61400-1 profile instead of interpolating from contstraints

@@ -9,5 +9,6 @@
 #SBATCH --mail-type BEGIN,END,FAIL              # Send e-mail when job begins, ends or fails
 
 python --version
+python -c 'import struct;print( 8 * struct.calcsize("P"))'
 ls
 python GenerateTurbBox.py
