@@ -9,27 +9,46 @@ import sys
 import itertools
 from pyconturb.tictoc import Timer
 
-
-# ---- Parameters
-Case='A1'
-Suffix=''
-ymin,ymax = -198,198
-zmin,zmax = 3,198
-ny = 133 # 133 # TODO 133
-nz = 66  # 66  # TODO 66
-# ny = 25 # 133 # TODO 133
-# nz = 5  # 66  # TODO 66
-
-
-
+# --- Parameters
 dtype=np.float32 # TODO
 bBackWard=False
+Suffix=''
+
+# --- Parameters from command line
+if len(sys.argv)==4:
+    Case    = sys.argv[1].strip()
+    Size    = sys.argv[2].strip()
+    ichunk  = int(sys.argv[3])
+    nchunks = int(sys.argv[4])
+else:
+    ichunk=None
+    nchunks=None
+    Case='A1'
+    Size=161
 
 # --- Constants and derived params
+Suffix=Suffix+'_'+str(Size)
+if Size==161:
+    ymin,ymax = -240,240
+    zmin,zmax = 3,240
+    ny = 161 # 133 # TODO 133
+    nz = 80  # 66  # TODO 66
+elif Size==133:
+    ymin,ymax = -198,198
+    zmin,zmax = 3,198
+    ny = 133 # 133 # TODO 133
+    nz = 66  # 66  # TODO 66
+else:
+    ymin,ymax = -198,198
+    zmin,zmax = 3,198
+    ny = 25 # 133 # TODO 133
+    nz = 5  # 66  # TODO 66
+print('>>> Case:   ',Case)
+print('>>> Size:   ',Size)
+print('>>> Suffix: ',Suffix)
+print('>>> y:      ',ymin,ymax,ny)
+print('>>> z:      ',zmin,zmax,nz)
 h_hub=57;
-x_refPoints=np.array(3*[293.9])
-y_refPoints=np.array(3*[107.1])
-z_refPoints=np.array([17,57,93])
 pkl_file = '{}{}.pkl'.format(Case,Suffix)
 pkl_space = '{}{}_space.pkl'.format(Case,Suffix)
 con_file = '35Hz_data/{}_pyConTurb_tc.csv'.format(Case)
@@ -89,13 +108,6 @@ pickle.dump(spat_df, open(pkl_space,'wb'))
 
 
 # ---  Generate constrained turbulence
-#  dealing with subcalls
-if len(sys.argv)==3:
-    ichunk =int(sys.argv[1])
-    nchunks=int(sys.argv[2])
-else:
-    ichunk=None
-    nchunks=None
 
 # We now pass our constraint object and other arguments into `gen_turb` as follows.
 with Timer('all:'):
