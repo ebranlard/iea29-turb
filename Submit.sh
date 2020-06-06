@@ -14,7 +14,7 @@ ls
 python GenerateTurbBox.py
 
 
-export n=10
+export n=18
 python -u GenerateTurbBox.py 1  $n  &
 python -u GenerateTurbBox.py 2  $n  &
 python -u GenerateTurbBox.py 3  $n  &
@@ -24,5 +24,13 @@ python -u GenerateTurbBox.py 6  $n  &
 python -u GenerateTurbBox.py 7  $n  &
 python -u GenerateTurbBox.py 8  $n  &
 python -u GenerateTurbBox.py 9  $n  &
-python -u GenerateTurbBox.py 10 $n 
+python -u GenerateTurbBox.py 10 $n  &
+python -u GenerateTurbBox.py 11 $n  &
+python -u GenerateTurbBox.py 12 $n  &
+python -u GenerateTurbBox.py 13 $n  &
+python -u GenerateTurbBox.py 14 $n  &
+python -u GenerateTurbBox.py 15 $n  &
+python -u GenerateTurbBox.py 16 $n  &
+python -u GenerateTurbBox.py 17 $n  &
+python -u GenerateTurbBox.py 18 $n  
 

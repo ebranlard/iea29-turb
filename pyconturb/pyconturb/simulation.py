@@ -194,10 +194,8 @@ def gen_turb(spat_df, T=600, dt=1, con_tc=None, coh_model='iec',
 
                 with  Timer('Sigma:'):
                     # assemble "sigma" matrix, which is coh matrix times mag arrays
-                    print('all_coh_mat',all_coh_mat.dtype)
                     sigma = np.einsum('i,j->ij', all_mags[i_f, :],
                                       all_mags[i_f, :]) * all_coh_mat[:, :, i_f % nf_chunk]
-                    print('sigma',sigma.dtype)
 
                 with  Timer('Cholesky:'):
                     # get cholesky decomposition of sigma matrix
@@ -227,7 +225,8 @@ def gen_turb(spat_df, T=600, dt=1, con_tc=None, coh_model='iec',
 
     if export_sub and ichunk==nchunks:
 
-        @retry(wait_exponential_multiplier=10*1000, wait_exponential_max=3600*1000)
+        # delay = 2^n *10s + 300s maximum 1h
+        @retry(wait_exponential_multiplier=10*1000, wait_exponential_max=300*1000, stop_max_delay=3600*1000)
         def Combine():
             files=glob.glob(preffix+'pyConTurb_*.pkl')
             print('Combining files, {}/{} present'.format(len(files), freq.size-1))
@@ -262,6 +261,16 @@ def gen_turb(spat_df, T=600, dt=1, con_tc=None, coh_model='iec',
     else:
         print('Turbulence generation for sub frequencies complete.')
         turb_df=None
+
+    if export_sub and ichunk==nchunks:
+        with  Timer('Delete'):
+            try:
+                for i_f in range(1, freq.size):
+                    filename=preffix+'pyConTurb_'+str(i_f)+'.pkl'
+                    os.remove(filename)
+            except:
+                pass
+
 
     return turb_df
 
