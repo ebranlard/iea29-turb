@@ -1,6 +1,6 @@
 #!/bin/bash
-#SBATCH --job-name=TB                   # Job name
-#SBATCH --time=09:15:00
+#SBATCH --job-name=TBB1                   # Job name
+#SBATCH --time=38:15:00
 #SBATCH --nodes=1                               # Number of nodes
 #SBATCH --ntasks-per-node=36                    # Number of processors per node
 #SBATCH -A bar                           # Allocation
@@ -9,9 +9,9 @@
 #SBATCH --mail-type BEGIN,END,FAIL              # Send e-mail when job begins, ends or fails
 
 export n=3
-python -u GenerateTurbBox.py 1  $n  &
-python -u GenerateTurbBox.py 2  $n  &
-python -u GenerateTurbBox.py 3  $n 
+python -u GenerateTurbBoxB1.py 1  $n  &
+python -u GenerateTurbBoxB1.py 2  $n  &
+python -u GenerateTurbBoxB1.py 3  $n 
 # python -u GenerateTurbBox.py 4  $n  &
 # python -u GenerateTurbBox.py 5  $n  &
 # python -u GenerateTurbBox.py 6  $n 

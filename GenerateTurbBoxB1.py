@@ -11,16 +11,18 @@ from pyconturb.tictoc import Timer
 
 
 # ---- Parameters
-Case='A1'
+Case='B1'
 Suffix=''
-ymin,ymax = -198,198
-zmin,zmax = 3,198
-ny = 133 # 133 # TODO 133
-nz = 66  # 66  # TODO 66
+# ymin,ymax = -198,198
+# zmin,zmax = 3,198
+# ny = 133 # 133 # TODO 133
+# nz = 66  # 66  # TODO 66
 # ny = 25 # 133 # TODO 133
 # nz = 5  # 66  # TODO 66
-
-
+ymin,ymax = -240,240
+zmin,zmax = 3,240
+ny = 161 # 133 # TODO 133
+nz = 80  # 66  # TODO 66
 
 dtype=np.float32 # TODO
 bBackWard=False
