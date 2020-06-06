@@ -111,7 +111,7 @@ pickle.dump(spat_df, open(pkl_space,'wb'))
 
 # We now pass our constraint object and other arguments into `gen_turb` as follows.
 with Timer('all:'):
-    sim_turb_df = gen_turb(spat_df, con_tc=con_tc, interp_data=interp_data, seed=12, verbose=True, ichunk=ichunk, nchunks=nchunks, preffix=Case+Suffix+'_', dtype=dtype, **kwargs)
+    sim_turb_df = gen_turb(spat_df, con_tc=con_tc, interp_data=interp_data, seed=12, verbose=True, ichunk=ichunk, nchunks=nchunks, preffix='data/'+Case+Suffix+'_', dtype=dtype, **kwargs)
 
 if sim_turb_df is not None: 
     pickle.dump(sim_turb_df, open(pkl_file,'wb'))
