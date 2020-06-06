@@ -176,7 +176,8 @@ def gen_turb(spat_df, T=600, dt=1, con_tc=None, coh_model='iec',
 
         # loop through frequencies
         for i_f in freq_idx:
-            with Timer('Freq_loop:'):
+            sLbl='{:d} {:5d}/{} {:5d} - '.format(ichunk,i_f-freq_idx[0],len(freq_idx),i_f)
+            with Timer(sLbl+'Freq_loop:'):
                 filename=preffix+'pyConTurb_'+str(i_f)+'.pkl'
                 if export_sub and os.path.exists(filename):
                     print('>>> File exists, skipping ', filename)
@@ -186,23 +187,23 @@ def gen_turb(spat_df, T=600, dt=1, con_tc=None, coh_model='iec',
                 if (i_f - 1) % nf_chunk == 0:  # genr cohrnc chunk when needed
                     if verbose:
                         print(f'  Processing chunk {i_chunk + 1} / {n_chunks}')
-                    with  Timer('Coherence'):
+                    with  Timer(sLbl+'Coherence'):
                         all_coh_mat = get_coh_mat(freq[i_chunk * nf_chunk:
                                                        (i_chunk + 1) * nf_chunk],
                                                   all_spat_df, coh_model=coh_model,
                                                   dtype=dtype,
                                                   **kwargs)
 
-                with  Timer('Sigma:'):
+                with  Timer(sLbl+'Sigma:'):
                     # assemble "sigma" matrix, which is coh matrix times mag arrays
                     sigma = np.einsum('i,j->ij', all_mags[i_f, :],
                                       all_mags[i_f, :]) * all_coh_mat[:, :, i_f % nf_chunk]
 
-#                 with  Timer('Cholesky:'):
+#                 with  Timer(sLbl+'Cholesky:'):
 #                     # get cholesky decomposition of sigma matrix
 #                     cor_mat = np.linalg.cholesky(sigma)
 
-                with  Timer('Cholesky:'):
+                with  Timer(sLbl+'Cholesky:'):
                     # get cholesky decomposition of sigma matrix
                     cor_mat = scipy.linalg.cholesky(sigma,overwrite_a=True, check_finite=False, lower=True)
 
@@ -210,11 +211,11 @@ def gen_turb(spat_df, T=600, dt=1, con_tc=None, coh_model='iec',
 
                 # if constraints, assign data unc_pha
                 if constrained:
-                    with  Timer('Solve:'):
+                    with  Timer(sLbl+'Solve:'):
                         dat_unc_pha = np.linalg.solve(cor_mat[:n_d, :n_d], conturb_fft[i_f, :])
                 else:
                     dat_unc_pha = []
-                with  Timer('Rest:'):
+                with  Timer(sLbl+'Rest:'):
                     unc_pha = np.concatenate((dat_unc_pha, sim_unc_pha[i_f, :]))
                     cor_pha = cor_mat @ unc_pha
 
@@ -246,11 +247,11 @@ def gen_turb(spat_df, T=600, dt=1, con_tc=None, coh_model='iec',
                 turb_fft[i_f, :] = cor_pha
             return turb_fft
 
-        with  Timer('Combine'):
+        with  Timer(sLbl+'Combine'):
             turb_fft=Combine()
 
     if ichunk==nchunks:
-        with  Timer('Final'):
+        with  Timer(sLbl+'Final'):
             # convert to time domain and pandas dataframe
             turb_arr = np.fft.irfft(turb_fft, axis=0, n=n_t) * n_t
             turb_arr = turb_arr.astype(dtype, copy=False)           
@@ -270,7 +271,7 @@ def gen_turb(spat_df, T=600, dt=1, con_tc=None, coh_model='iec',
         turb_df=None
 
     if export_sub and ichunk==nchunks:
-        with  Timer('Delete'):
+        with  Timer(sLbl+'Delete'):
             try:
                 for i_f in range(1, freq.size):
                     filename=preffix+'pyConTurb_'+str(i_f)+'.pkl'
