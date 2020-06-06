@@ -15,9 +15,9 @@ bBackWard=False
 Suffix=''
 
 # --- Parameters from command line
-if len(sys.argv)==4:
+if len(sys.argv)>1:
     Case    = sys.argv[1].strip()
-    Size    = sys.argv[2].strip()
+    Size    = int(sys.argv[2])
     ichunk  = int(sys.argv[3])
     nchunks = int(sys.argv[4])
 else:
@@ -43,11 +43,12 @@ else:
     zmin,zmax = 3,198
     ny = 25 # 133 # TODO 133
     nz = 5  # 66  # TODO 66
-print('>>> Case:   ',Case)
-print('>>> Size:   ',Size)
-print('>>> Suffix: ',Suffix)
-print('>>> y:      ',ymin,ymax,ny)
-print('>>> z:      ',zmin,zmax,nz)
+print('>>> Case:   {}'.format(Case))
+print('>>> Size:   {}'.format(Size))
+print('>>> Suffix: {}'.format(Suffix))
+print('>>> Chunks: {} {}'.format(ichunk,nchunks))
+print('>>> y:      {} {} {}'.format(ymin,ymax,ny))
+print('>>> z:      {} {} {}'.format(zmin,zmax,nz))
 h_hub=57;
 pkl_file = '{}{}.pkl'.format(Case,Suffix)
 pkl_space = '{}{}_space.pkl'.format(Case,Suffix)

@@ -25,6 +25,7 @@ import pickle
 from retrying import retry
 import glob
 import scipy
+import random
 
 def gen_turb(spat_df, T=600, dt=1, con_tc=None, coh_model='iec',
              wsp_func=None, sig_func=None, spec_func=None,
@@ -168,6 +169,7 @@ def gen_turb(spat_df, T=600, dt=1, con_tc=None, coh_model='iec',
     else:
         # Splitting freq_idx into nchunks and selecting current chunk
         freq_idx = np.array_split(np.arange(1, freq.size), nchunks)[ichunk-1]
+        random.shuffle(freq_idx)
         print('Full process {} frequencies, indices: {} to {}'.format(len(freq_idx),freq_idx[0],freq_idx[-1]))
 
         if not export_sub:
@@ -175,8 +177,8 @@ def gen_turb(spat_df, T=600, dt=1, con_tc=None, coh_model='iec',
         n_chunks = int(np.ceil(freq.size / nf_chunk))
 
         # loop through frequencies
-        for i_f in freq_idx:
-            sLbl='{:d} {:5d}/{} {:5d} - '.format(ichunk,i_f-freq_idx[0],len(freq_idx),i_f)
+        for iif,i_f in enumerate(freq_idx):
+            sLbl='{:d} {:5d}/{} {:5d} - '.format(ichunk,iif,len(freq_idx),i_f)
             with Timer(sLbl+'Freq_loop:'):
                 filename=preffix+'pyConTurb_'+str(i_f)+'.pkl'
                 if export_sub and os.path.exists(filename):
