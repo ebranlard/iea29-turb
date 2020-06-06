@@ -12,3 +12,17 @@ python --version
 python -c 'import struct;print( 8 * struct.calcsize("P"))'
 ls
 python GenerateTurbBox.py
+
+
+export n=10
+python -u GenerateTurbBox.py 1  $n  &
+python -u GenerateTurbBox.py 2  $n  &
+python -u GenerateTurbBox.py 3  $n  &
+python -u GenerateTurbBox.py 4  $n  &
+python -u GenerateTurbBox.py 5  $n  &
+python -u GenerateTurbBox.py 6  $n  &
+python -u GenerateTurbBox.py 7  $n  &
+python -u GenerateTurbBox.py 8  $n  &
+python -u GenerateTurbBox.py 9  $n  &
+python -u GenerateTurbBox.py 10 $n 
+

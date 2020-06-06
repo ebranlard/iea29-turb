@@ -19,10 +19,15 @@ from pyconturb.wind_profiles import get_wsp_values, power_profile, data_profile
 from pyconturb._utils import (combine_spat_con, _spat_rownames, _DEF_KWARGS,
                               clean_turb, check_sims_collocated)
 
+from pyconturb.tictoc import Timer
+import os
+import pickle
+from retrying import retry
+import glob
 
 def gen_turb(spat_df, T=600, dt=1, con_tc=None, coh_model='iec',
              wsp_func=None, sig_func=None, spec_func=None,
-             interp_data='none', seed=None, nf_chunk=1, verbose=False, **kwargs):
+             interp_data='none', seed=None, nf_chunk=1, verbose=False, dtype=np.float64, ichunk=None, nchunks=None, preffix='', **kwargs):
     """Generate a turbulence box (constrained or unconstrained).
 
     Parameters
@@ -65,6 +70,9 @@ def gen_turb(spat_df, T=600, dt=1, con_tc=None, coh_model='iec',
         may benefit from larger values for ``nf_chunk``. Default is 1.
     verbose : bool, optional
         Print extra information during turbulence generation. Default is False.
+    dtype : data type, optional
+        Change precision of calculation (np.float32 or np.float64). Will reduce the 
+        storage, and might slightly reduce the computational time. Default is np.float64
     **kwargs
         Optional keyword arguments to be fed into the
         spectral/turbulence/profile/etc. models.
@@ -92,6 +100,18 @@ def gen_turb(spat_df, T=600, dt=1, con_tc=None, coh_model='iec',
         print('All simulation points collocated with constraints! '
               + 'Nothing to simulate.')
         return None
+    # Optional chunks
+    if ichunk is None or nchunks is None:
+        ichunk, nchunks =1, 1
+        export_sub=False # all frequencies computed at one
+    else:
+        export_sub=True # will create pickle files for each frequency
+        if nf_chunk!=1:
+            raise Exception('Chunks not compatible with nf_chunk!=1')
+        if seed is None:
+            raise Exception('Chunks require seed')
+
+    dtype_complex=np.complex64 if dtype==np.float32 else np.complex128
 
     # add T, dt, con_tc to kwargs
     kwargs = {**_DEF_KWARGS, **kwargs, 'T': T, 'dt': dt, 'con_tc': con_tc}
@@ -131,6 +151,7 @@ def gen_turb(spat_df, T=600, dt=1, con_tc=None, coh_model='iec',
         all_mags = np.concatenate((con_mags, sim_mags), axis=1)  # con and sim
     else:
         all_mags = sim_mags  # just sim
+    all_mags=all_mags.astype(dtype, copy=False)
 
     # get uncorrelated phasors for simulation
     np.random.seed(seed=seed)  # initialize random number generator
@@ -144,59 +165,105 @@ def gen_turb(spat_df, T=600, dt=1, con_tc=None, coh_model='iec',
 
     # if more than one point, correlate everything
     else:
-        turb_fft = np.zeros((n_f, n_s), dtype=complex)
+        # Splitting freq_idx into nchunks and selecting current chunk
+        freq_idx = np.array_split(np.arange(1, freq.size), nchunks)[ichunk-1]
+        print('Full process {} frequencies, indices: {} to {}'.format(len(freq_idx),freq_idx[0],freq_idx[-1]))
+
+        if not export_sub:
+            turb_fft = np.zeros((n_f, n_s), dtype=dtype_complex)
         n_chunks = int(np.ceil(freq.size / nf_chunk))
 
         # loop through frequencies
-        for i_f in range(1, freq.size):
-            i_chunk = i_f // nf_chunk  # calculate chunk number
-            if (i_f - 1) % nf_chunk == 0:  # genr cohrnc chunk when needed
-                if verbose:
-                    with open('status'+str(i_chunk)+'.tmp','w') as f:
-                        f.write('stat')
-                    print(f'  Processing chunk {i_chunk + 1} / {n_chunks}')
-                all_coh_mat = get_coh_mat(freq[i_chunk * nf_chunk:
-                                               (i_chunk + 1) * nf_chunk],
-                                          all_spat_df, coh_model=coh_model,
-                                          **kwargs)
+        for i_f in freq_idx:
+            with Timer('Freq_loop:'):
+                filename=preffix+'pyConTurb_'+str(i_f)+'.pkl'
+                if export_sub and os.path.exists(filename):
+                    print('>>> File exists, skipping ', filename)
+                    continue
 
-            # assemble "sigma" matrix, which is coh matrix times mag arrays
-            coh_mat = all_coh_mat[:, :, i_f % nf_chunk]
-            sigma = np.einsum('i,j->ij', all_mags[i_f, :],
-                              all_mags[i_f, :]) * coh_mat
+                i_chunk = i_f // nf_chunk  # calculate chunk number
+                if (i_f - 1) % nf_chunk == 0:  # genr cohrnc chunk when needed
+                    if verbose:
+                        print(f'  Processing chunk {i_chunk + 1} / {n_chunks}')
+                    with  Timer('Coherence'):
+                        all_coh_mat = get_coh_mat(freq[i_chunk * nf_chunk:
+                                                       (i_chunk + 1) * nf_chunk],
+                                                  all_spat_df, coh_model=coh_model,
+                                                  dtype=dtype,
+                                                  **kwargs)
 
-            # get cholesky decomposition of sigma matrix
-            cor_mat = np.linalg.cholesky(sigma)
+                with  Timer('Sigma:'):
+                    # assemble "sigma" matrix, which is coh matrix times mag arrays
+                    print('all_coh_mat',all_coh_mat.dtype)
+                    sigma = np.einsum('i,j->ij', all_mags[i_f, :],
+                                      all_mags[i_f, :]) * all_coh_mat[:, :, i_f % nf_chunk]
+                    print('sigma',sigma.dtype)
 
-            # if constraints, assign data unc_pha
-            if constrained:
-                dat_unc_pha = np.linalg.solve(cor_mat[:n_d, :n_d], conturb_fft[i_f, :])
-            else:
-                dat_unc_pha = []
-            unc_pha = np.concatenate((dat_unc_pha, sim_unc_pha[i_f, :]))
-            cor_pha = cor_mat @ unc_pha
+                with  Timer('Cholesky:'):
+                    # get cholesky decomposition of sigma matrix
+                    cor_mat = np.linalg.cholesky(sigma)
 
-            # calculate and save correlated Fourier components
-            turb_fft[i_f, :] = cor_pha
+                # if constraints, assign data unc_pha
+                if constrained:
+                    with  Timer('Solve:'):
+                        dat_unc_pha = np.linalg.solve(cor_mat[:n_d, :n_d], conturb_fft[i_f, :])
+                else:
+                    dat_unc_pha = []
+                with  Timer('Rest:'):
+                    unc_pha = np.concatenate((dat_unc_pha, sim_unc_pha[i_f, :]))
+                    cor_pha = cor_mat @ unc_pha
 
-        del all_coh_mat  # free up memory
+                    # calculate and save correlated Fourier components
+                    if export_sub:
+                        print('>>> Writing ',filename)
+                        pickle.dump(cor_pha, open(filename,'wb'))
+                    else:
+                        turb_fft[i_f, :] = cor_pha
 
-    # convert to time domain and pandas dataframe
-    turb_arr = np.fft.irfft(turb_fft, axis=0, n=n_t) * n_t
-    turb_df = pd.DataFrame(turb_arr, columns=all_spat_df.columns, index=t)
+        try:
+            del all_coh_mat  # free up memory
+        except:
+            pass
 
-    # return just the desired simulation points
-    turb_df = clean_turb(spat_df, all_spat_df, turb_df)
+    if export_sub and ichunk==nchunks:
 
-    # add in mean wind speed according to specified profile
-    wsp_profile = get_wsp_values(spat_df, wsp_func, **kwargs)
-    turb_df[:] += wsp_profile
+        @retry(wait_exponential_multiplier=10*1000, wait_exponential_max=3600*1000)
+        def Combine():
+            files=glob.glob(preffix+'pyConTurb_*.pkl')
+            print('Combining files, {}/{} present'.format(len(files), freq.size-1))
+            # Load all pickles
+            turb_fft = np.zeros((n_f, n_s), dtype=dtype_complex)
+            for i_f in range(1, freq.size):
+                filename=preffix+'pyConTurb_'+str(i_f)+'.pkl'
+                print(filename)
+                cor_pha = pickle.load(open(filename,'rb'))
+                turb_fft[i_f, :] = cor_pha
+            return turb_fft
 
-    if verbose:
-        print('Turbulence generation complete.')
+        with  Timer('Combine'):
+            turb_fft=Combine()
+
+    if ichunk==nchunks:
+        with  Timer('Final'):
+            # convert to time domain and pandas dataframe
+            turb_arr = np.fft.irfft(turb_fft, axis=0, n=n_t) * n_t
+            turb_arr = turb_arr.astype(dtype, copy=False)           
+            turb_df = pd.DataFrame(turb_arr, columns=all_spat_df.columns, index=t)
+
+            # return just the desired simulation points
+            turb_df = clean_turb(spat_df, all_spat_df, turb_df)
+
+            # add in mean wind speed according to specified profile
+            wsp_profile = get_wsp_values(spat_df, wsp_func, **kwargs)
+            turb_df[:] += wsp_profile
+
+        if verbose:
+            print('Turbulence generation complete.')
+    else:
+        print('Turbulence generation for sub frequencies complete.')
+        turb_df=None
 
     return turb_df
-
 
 def assign_profile_functions(wsp_func, sig_func, spec_func, interp_data):
     """Assign profile functions based on user inputs"""
