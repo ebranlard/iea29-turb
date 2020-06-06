@@ -24,6 +24,7 @@ import os
 import pickle
 from retrying import retry
 import glob
+import scipy
 
 def gen_turb(spat_df, T=600, dt=1, con_tc=None, coh_model='iec',
              wsp_func=None, sig_func=None, spec_func=None,
@@ -197,9 +198,15 @@ def gen_turb(spat_df, T=600, dt=1, con_tc=None, coh_model='iec',
                     sigma = np.einsum('i,j->ij', all_mags[i_f, :],
                                       all_mags[i_f, :]) * all_coh_mat[:, :, i_f % nf_chunk]
 
+#                 with  Timer('Cholesky:'):
+#                     # get cholesky decomposition of sigma matrix
+#                     cor_mat = np.linalg.cholesky(sigma)
+
                 with  Timer('Cholesky:'):
                     # get cholesky decomposition of sigma matrix
-                    cor_mat = np.linalg.cholesky(sigma)
+                    cor_mat = scipy.linalg.cholesky(sigma,overwrite_a=True, check_finite=False, lower=True)
+
+
 
                 # if constraints, assign data unc_pha
                 if constrained:
