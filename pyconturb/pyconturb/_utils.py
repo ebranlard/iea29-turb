@@ -6,6 +6,7 @@ import os
 import numpy as np
 import pandas as pd
 import scipy.interpolate as sciint
+from pyconturb.tictoc import Timer
 
 
 _spat_rownames = ['k', 'x', 'y', 'z']  # row names of spatial df
@@ -30,7 +31,6 @@ def check_sims_collocated(spat_df, con_tc):
     s_non_uniq = np.any(s_in_c, axis=1)  # [ns] array of if s is non unique
     return np.all(s_non_uniq)
 
-
 def clean_turb(spat_df, all_spat_df, turb_df, decimals=10):
     """Remove the columns we don't return and rename the rest correctly. Will check only
     to decimals places when removing duplicates (data unchanged)."""
@@ -43,15 +43,18 @@ def clean_turb(spat_df, all_spat_df, turb_df, decimals=10):
     # get unique locs in spat_df (need rounding logic here for dropping float duplicates)
     spat_xyz = spat_df.loc[['x', 'y', 'z']]
     spat_xyz = spat_xyz.T.loc[~spat_xyz.T.apply(np.round,
-                                                args=[decimals]).duplicated()].T
+                                                    args=[decimals]).duplicated()].T
     # for each column in all_spat_df, find the correct name using spat_df and rename it
+    rename_map={}
     for colname in all_spat_df:
         col = all_spat_df[colname]
         k, x, y, z = col.values
         pid = np.all(np.isclose(np.array([x, y, z]), spat_xyz.values.T),
                      axis=1).argmax()  # use np.isclose for float comparisons
         new_name = f'{"uvw"[int(k)]}_p{pid}'
-        turb_df.rename(columns={colname: new_name}, inplace=True)
+        if colname!=new_name:
+            rename_map[colname]=new_name
+    turb_df.rename(columns=rename_map, inplace=True)
     # order according to spat_df
     col_names = []
     for colname in spat_df:
