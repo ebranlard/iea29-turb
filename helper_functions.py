@@ -35,27 +35,55 @@ def get_wsp_func(con_tc, h_hub, plot=False):
     con_mean = con_stats.loc['mean']
     con_std  = con_stats.loc['std']
     con_z    = con_tc.filter(regex='u_').loc['z']
+    u_mean = con_mean.filter(regex='u_')
+    v_mean = con_mean.filter(regex='v_')
 
-    u_mean=con_mean['u_p1']
 
-    y_fit, pfit, model = fit_powerlaw_u_alpha(con_z, con_mean.filter(regex='u_'), z_ref=h_hub, p0=(u_mean,0.1))
+    # --- fit u
+    y_fit, pfit, model = fit_powerlaw_u_alpha(con_z, u_mean, z_ref=h_hub, p0=(u_mean['u_p1'],0.1))
 
     alpha=pfit[1]
     u_ref=pfit[0]
     my_wsp_fun = lambda y,z: power_profile(y, z, u_ref= model['coeffs']['u_ref'], z_ref= h_hub, alpha=model['coeffs']['alpha'])
 
+    # --- fit v
+
+    zzzzz=np.concatenate((con_z,[240]))
+    v_mean=np.concatenate((v_mean,[v_mean[-1]*1.0]))
+
+    print(con_z,v_mean)
+#     y_fit, pfit, model_v = fit_powerlaw_u_alpha(con_z, v_mean, z_ref=h_hub, p0=(v_mean['v_p1'],0.1))
+#     y_fit, pfit, fitter_v = model_fit('eval: {A}*np.arctan({B}*x+{C})+1.0',zzzzz, v_mean)
+    y_fit, pfit, fitter_v = model_fit('eval: {:.3f}*np.exp(-{:s}*x**5) +{:.3f}'.format(v_mean[0]-v_mean[-1],'{a}',+v_mean[-1]),zzzzz, v_mean)
+    model_v=fitter_v.model
+
+    my_veer_fun = lambda y,z, **kwargs: model_v['fitted_function'](z)
+
+
+#     y_fit, pfit, model_v = fit_polynomial_continuous(zzzzz, v_mean, order=2)
+
     if plot:
+
         zz=np.linspace(0,240,100)
         fig,ax = plt.subplots(1, 1, sharey=False, figsize=(6.4,4.8)) # (6.4,4.8)
         fig.subplots_adjust(left=0.12, right=0.95, top=0.95, bottom=0.11, hspace=0.20, wspace=0.20)
-        ax.plot(con_umean, con_z, 'kd', label='meas')
+        ax.plot(u_mean, con_z, 'kd', label='meas')
         ax.plot(model['fitted_function'](zz), zz, '-', label='fit')
-        ax.set_xlabel('')
-        ax.set_ylabel('')
+        ax.set_xlabel('u [m/s]')
+        ax.set_ylabel('z [m]')
         ax.legend()
         ax.tick_params(direction='in')
-        plt.show()
-    return alpha, u_ref, my_wsp_fun
+
+        zz=np.linspace(0,240,100)
+        fig,ax = plt.subplots(1, 1, sharey=False, figsize=(6.4,4.8)) # (6.4,4.8)
+        fig.subplots_adjust(left=0.12, right=0.95, top=0.95, bottom=0.11, hspace=0.20, wspace=0.20)
+        ax.plot(v_mean, zzzzz, 'kd', label='meas')
+        ax.plot(model_v['fitted_function'](zz), zz, '-', label='fit')
+        ax.set_xlabel('v [m/s]')
+        ax.set_ylabel('z [m]')
+        ax.legend()
+        ax.tick_params(direction='in')
+    return alpha, u_ref, my_wsp_fun, my_veer_fun
 
 
 
@@ -105,7 +133,6 @@ def get_sigma_func(con_tc, plot=False):
         ax.set_ylabel('')
         ax.legend()
         ax.tick_params(direction='in')
-        plt.show()
 
 
     return custom_sig

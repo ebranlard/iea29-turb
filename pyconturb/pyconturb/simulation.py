@@ -9,6 +9,7 @@ import warnings
 
 import numpy as np
 import pandas as pd
+import scipy
 
 from pyconturb.coherence import get_coh_mat
 from pyconturb.core import TimeConstraint
@@ -24,11 +25,10 @@ import os
 import pickle
 from retrying import retry
 import glob
-import scipy
 import random
 
 def gen_turb(spat_df, T=600, dt=1, con_tc=None, coh_model='iec',
-             wsp_func=None, sig_func=None, spec_func=None,
+             wsp_func=None, veer_func=None, sig_func=None, spec_func=None,
              interp_data='none', seed=None, nf_chunk=1, verbose=False, dtype=np.float64, ichunk=None, nchunks=None, preffix='', **kwargs):
     """Generate a turbulence box (constrained or unconstrained).
 
@@ -119,7 +119,6 @@ def gen_turb(spat_df, T=600, dt=1, con_tc=None, coh_model='iec',
     kwargs = {**_DEF_KWARGS, **kwargs, 'T': T, 'dt': dt, 'con_tc': con_tc}
     wsp_func, sig_func, spec_func = assign_profile_functions(wsp_func, sig_func,
                                                              spec_func, interp_data)
-
     # assign/create constraining data
     n_t = int(np.ceil(kwargs['T'] / kwargs['dt']))  # no. time steps
     t = np.arange(n_t) * kwargs['dt']  # time array
@@ -232,6 +231,14 @@ def gen_turb(spat_df, T=600, dt=1, con_tc=None, coh_model='iec',
             del all_coh_mat  # free up memory
         except:
             pass
+    try:
+        del all_mags
+        del sigma
+        del cor_pha
+        del unc_pha
+    except:
+        print('>>> FAILEDTO FREE MEMORY')
+        pass
 
     if export_sub and ichunk==nchunks:
 
@@ -249,11 +256,11 @@ def gen_turb(spat_df, T=600, dt=1, con_tc=None, coh_model='iec',
                 turb_fft[i_f, :] = cor_pha
             return turb_fft
 
-        with  Timer(sLbl+'Combine'):
+        with  Timer('Combine'):
             turb_fft=Combine()
 
     if ichunk==nchunks:
-        with  Timer(sLbl+'Final'):
+        with  Timer('Final'):
             # convert to time domain and pandas dataframe
             turb_arr = np.fft.irfft(turb_fft, axis=0, n=n_t) * n_t
             turb_arr = turb_arr.astype(dtype, copy=False)           
@@ -263,7 +270,7 @@ def gen_turb(spat_df, T=600, dt=1, con_tc=None, coh_model='iec',
             turb_df = clean_turb(spat_df, all_spat_df, turb_df)
 
             # add in mean wind speed according to specified profile
-            wsp_profile = get_wsp_values(spat_df, wsp_func, **kwargs)
+            wsp_profile = get_wsp_values(spat_df, wsp_func, veer_func, **kwargs)
             turb_df[:] += wsp_profile
 
         if verbose:
@@ -273,7 +280,7 @@ def gen_turb(spat_df, T=600, dt=1, con_tc=None, coh_model='iec',
         turb_df=None
 
     if export_sub and ichunk==nchunks:
-        with  Timer(sLbl+'Delete'):
+        with  Timer('Delete'):
             try:
                 for i_f in range(1, freq.size):
                     filename=preffix+'pyConTurb_'+str(i_f)+'.pkl'

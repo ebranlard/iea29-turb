@@ -11,7 +11,7 @@ import numpy as np
 from pyconturb._utils import _DEF_KWARGS, interpolator
 
 
-def get_wsp_values(spat_df, wsp_func, **kwargs):
+def get_wsp_values(spat_df, wsp_func,veer_func=None, **kwargs):
     """Mean wind speed for points/components in ``spat_df``.
 
     The ``wsp_func`` must be a function of the form::
@@ -40,8 +40,11 @@ def get_wsp_values(spat_df, wsp_func, **kwargs):
         [m/s] Mean wind speeds for the given spatial locations(s)/component(s).
         Dimension is ``(n_sp,)``.
     """
-    wsp_values = wsp_func(spat_df.loc['y'], spat_df.loc['z'],
+    wsp_values  = wsp_func(spat_df.loc['y'], spat_df.loc['z'],
                           **kwargs) * (spat_df.loc['k'] == 0)
+    if veer_func is not None:
+        wsp_values += veer_func(spat_df.loc['y'], spat_df.loc['z'], **kwargs) * (spat_df.loc['k'] == 1)
+
     return np.array(wsp_values)  # convert to array in case series given
 
 

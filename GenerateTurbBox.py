@@ -1,13 +1,15 @@
-#!/usr/bin/env python
-from pathlib import Path
 import matplotlib.pyplot as plt  # matplotlib for some plotting
 import numpy as np  # numeric python functions
 import pandas as pd  # need this to load our data from the csv files
-from pyconturb import gen_turb, gen_spat_grid, TimeConstraint  # functions we need from PyConTurb
 import pickle
 import sys
 import itertools
+import scipy.optimize as so
+import os
+from pyconturb import gen_turb, gen_spat_grid, TimeConstraint  # functions we need from PyConTurb
 from pyconturb.tictoc import Timer
+from pyconturb.wind_profiles import power_profile
+from helper_functions import *
 
 # --- Parameters
 dtype=np.float32 # TODO
@@ -23,8 +25,9 @@ if len(sys.argv)>1:
 else:
     ichunk=None
     nchunks=None
-    Case='A1'
-    Size=161
+    Case='B1'
+    Suffix+='_nochunks'
+    Size=1
 
 # --- Constants and derived params
 Suffix=Suffix+'_'+str(Size)
@@ -38,10 +41,15 @@ elif Size==133:
     zmin,zmax = 3,198
     ny = 133 # 133 # TODO 133
     nz = 66  # 66  # TODO 66
+elif Size==37:
+    ymin,ymax = -110,1
+    zmin,zmax = 12,96
+    ny = 37 # 133 # TODO 133
+    nz = 29 # 66  # TODO 66
 else:
     ymin,ymax = -198,198
     zmin,zmax = 3,198
-    ny = 25 # 133 # TODO 133
+    ny = 6 # 133 # TODO 133
     nz = 5  # 66  # TODO 66
 print('>>> Case:   {}'.format(Case))
 print('>>> Size:   {}'.format(Size))
@@ -54,70 +62,63 @@ pkl_file = '{}{}.pkl'.format(Case,Suffix)
 pkl_space = '{}{}_space.pkl'.format(Case,Suffix)
 con_file = '35Hz_data/{}_pyConTurb_tc.csv'.format(Case)
 
- ## Constraining time series
+# --- Constraint time series
 con_tc = TimeConstraint(pd.read_csv(con_file, index_col=0))  # load data from csv directly into tc
 con_tc.index = con_tc.index.map(lambda x: float(x) if (x not in 'kxyz') else x)  # index cleaning
-# con_tc.iloc[:7, :]  # look at the first 7 rows
-# con_tc.get_spat()
-# con_tc.get_time().iloc[:5, :8]
 time_df = con_tc.get_time()
 dt      = con_tc.get_time().index[1]
 T       = con_tc.get_T()-dt          # TODO
-u_ref=time_df['u_p1'].mean()
-# print('>>> Pkl : {}Mb'.format(0.14*ny*nz))
-# print('>>> T, dt:',T,dt)
-# print('>>> u_ref:',u_ref)
+print('>>> Pkl : {}Mb'.format(0.07*ny*nz))
+print('>>> T, dt:',T,dt)
+
+# --- Fitting power law and sigma
+alpha,u_ref, my_wsp_func,veer_func = get_wsp_func(con_tc, h_hub, plot   = False)
+my_sig_func                        = get_sigma_func(con_tc, plot = False)
 
 
+sig_func=None
+sig_func=my_sig_func
+wsp_func=None
+# wsp_func=my_sig_func
 
-
-
-
-# We can plot the points to visualize the locations of the constrainting points in space.
-# u_locs = con_tc.get_spat().filter(regex='u_').loc[['y', 'z']]
-# [plt.scatter(u_locs.loc['y', col], u_locs.loc['z', col], label=col) for col in u_locs];
-# plt.legend(); plt.ylabel('height [m]'); plt.xticks([]);
-# 
-# 
-# Now let's visualize the constraining time series.
-# ax = time_df.filter(regex='u_', axis=1).plot(lw=0.75)  # subselect long. wind component
-# ax.set_ylabel('longitudinal wind speed [m/s]');
-# [print(x) for x in time_df.filter(regex='u_', axis=1).mean()];  # print mean values
+print('Using fitted wind profile:')
+print('>>> alpha:',alpha)
+print('>>> u_ref:',u_ref)
+print('Using fitted sigma profile:')
 # plt.show()
-# 
-# 
-# ## Inputs to constrained turbulence
-# The first step is to define the spatial information for the desired turbulence box and the related parameters for the turbulence generation technique. In this case we will use the default IEC 61400-1 Ed. 3 simulation procedures (Kaimal Spectrum with Exponential Coherence) instead of interpolating from the data. Note that, by default, PyConTurb will not interpolate profiles from data.
 
+# ---
 y = np.linspace(ymin,ymax, ny)  # lateral components of turbulent grid
 z = np.linspace(zmin,zmax, nz)  # vertical components of turbulent grid
 # print('y:',y)
 # print('z:',z)
 kwargs = {'u_ref': u_ref, 'turb_class': 'B', 'z_hub': h_hub,  # necessary keyword arguments for IEC turbulence
+        'u_ref': u_ref, 'z_ref': h_hub, 'alpha':alpha, # keywords for power_profile
         'T': con_tc.get_T(), 'dt': con_tc.get_time().index[1], 'backward_comp':bBackWard}  # simulation length (s) and time step (s)
-interp_data = 'none'  # use the default IEC 61400-1 profile instead of interpolating from contstraints
+interp_data = ['wsp','sig']  # use the default IEC 61400-1 profile instead of interpolating from contstraints
+interp_data = "none"  # use the default IEC 61400-1 profile instead of interpolating from contstraints
 
-# This function below generates the actual spatial data. It assumes we want all three turbulence components at each spatial location.
-spat_df = gen_spat_grid(y, z)  # create our spatial pandas dataframe. Columns are k, p_id x, y, and z.
+# --- Save box spatial data
+spat_df = gen_spat_grid(y, z)
 pickle.dump(spat_df, open(pkl_space,'wb'))
 
-# plt.scatter(spat_df.loc['y'], spat_df.loc['z'], label='sim. grid')
-# plt.plot(con_tc.iloc[2, :6], con_tc.iloc[3, :6], 'rX', label='constraint')
-# plt.axis('equal'); plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.);
-
-
-
-
-# ---  Generate constrained turbulence
-
+# --- Generate constrained turbulence
 # We now pass our constraint object and other arguments into `gen_turb` as follows.
-with Timer('all:'):
-    sim_turb_df = gen_turb(spat_df, con_tc=con_tc, interp_data=interp_data, seed=12, verbose=True, ichunk=ichunk, nchunks=nchunks, preffix='data/'+Case+Suffix+'_', dtype=dtype, **kwargs)
+if os.path.exists(pkl_file):
+    print('>>> NOT GENERATING TURBULENCE, PKL FILE EXIST',pkl_file)
+else:
+    with Timer('all:'):
+        sim_turb_df = gen_turb(spat_df, con_tc=con_tc, interp_data=interp_data, wsp_func=wsp_func, veer_func=veer_func, sig_func=sig_func, seed=12, verbose=False, ichunk=ichunk, nchunks=nchunks, preffix='data/'+Case+Suffix+'_', dtype=dtype, **kwargs)
 
-if sim_turb_df is not None: 
-    pickle.dump(sim_turb_df, open(pkl_file,'wb'))
+    if sim_turb_df is not None: 
+        with Timer('Export:'):
+            print('>>> Exporting to pkl_file')
+            pickle.dump(sim_turb_df, open(pkl_file,'wb'))
 # 
 # **Note**: The profile functions selected for the wind speed, turbulence standard deviation and power spectra affect whether you regenerate the constraining data if a simulation point is collocated. One option is to use the built-in profile functions that interpolates these profiles from your data (see related example in the documentation). Otherwise, you can define your own profile functions for custom interpolation.
+
+# ## Inputs to constrained turbulence
+# The first step is to define the spatial information for the desired turbulence box and the related parameters for the turbulence generation technique. In this case we will use the default IEC 61400-1 Ed. 3 simulation procedures (Kaimal Spectrum with Exponential Coherence) instead of interpolating from the data. Note that, by default, PyConTurb will not interpolate profiles from data.
 
 # For a rotor diameter of ≈80 m, a maximum chord of ≈3 m, and a wind speed of ≈8 m/s, the rules of thumb for convergence of FAST.Farm would suggest the following discretization requirements for the ambient wind field:
 # •	Spatial resolution around rotor ≤ 3 m
