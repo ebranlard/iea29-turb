@@ -29,7 +29,8 @@ import random
 
 def gen_turb(spat_df, T=600, dt=1, con_tc=None, coh_model='iec',
              wsp_func=None, veer_func=None, sig_func=None, spec_func=None,
-             interp_data='none', seed=None, nf_chunk=1, verbose=False, dtype=np.float64, ichunk=None, nchunks=None, preffix='', **kwargs):
+             interp_data='none', seed=None, nf_chunk=1, verbose=False, dtype=np.float64, 
+             write_freq_data=False, combine_freq_data=False, preffix='', **kwargs):
     """Generate a turbulence box (constrained or unconstrained).
 
     Parameters
@@ -70,6 +71,24 @@ def gen_turb(spat_df, T=600, dt=1, con_tc=None, coh_model='iec',
         Number of frequencies in a chunk of analysis. Increasing this number may speed
         up computation but may result in more (or too much) memory used. Smaller grids
         may benefit from larger values for ``nf_chunk``. Default is 1.
+    write_freq_data : logical, optional
+        The data for each frequency is saved to a file, unless the file already exist, 
+        in which case the frequency is skipped. This parameter is useful for parallel 
+        processing, in conjunction with `combine_freq_data` and `preffix`. 
+        The frequencies are processed in random order. This way, two identical calls to
+        `gen_turb` can be run simulatenously, making it unlikely that two frequencies will
+        be processed at the same time.
+        Default is False.
+    combine_freq_data : logical, optional
+        When True, attempt to read all the files generated (by `write_freq_data`=True),
+        combine the data, and return the turbulence data frame `turb_df`. When parallel
+        calls are used, only one processor should be responsible to combine the files.
+        Should be used with write_freq_data is True.
+        Default is False.
+    preffix : string, optional
+        preffix used for the file generation. Only applies when `write_freq_data` is True.
+        Filenames are generated as: preffix+'pyConTurb'+str(i_f)+'.pkl'
+        Default is ''.
     verbose : bool, optional
         Print extra information during turbulence generation. Default is False.
     dtype : data type, optional
@@ -102,17 +121,6 @@ def gen_turb(spat_df, T=600, dt=1, con_tc=None, coh_model='iec',
         print('All simulation points collocated with constraints! '
               + 'Nothing to simulate.')
         return None
-    # Optional chunks
-    if ichunk is None or nchunks is None:
-        ichunk, nchunks =1, 1
-        export_sub=False # all frequencies computed at one
-    else:
-        export_sub=True # will create pickle files for each frequency
-        if nf_chunk!=1:
-            raise Exception('Chunks not compatible with nf_chunk!=1')
-        if seed is None:
-            raise Exception('Chunks require seed')
-
     dtype_complex=np.complex64 if dtype==np.float32 else np.complex128
 
     # add T, dt, con_tc to kwargs
@@ -166,21 +174,20 @@ def gen_turb(spat_df, T=600, dt=1, con_tc=None, coh_model='iec',
 
     # if more than one point, correlate everything
     else:
-        # Splitting freq_idx into nchunks and selecting current chunk
-        freq_idx = np.array_split(np.arange(1, freq.size), nchunks)[ichunk-1]
-        random.shuffle(freq_idx)
-        print('Full process {} frequencies, indices: {} to {}'.format(len(freq_idx),freq_idx[0],freq_idx[-1]))
 
-        if not export_sub:
+        if not write_freq_data: # then we need to store
             turb_fft = np.zeros((n_f, n_s), dtype=dtype_complex)
         n_chunks = int(np.ceil(freq.size / nf_chunk))
 
+        # Shuffle the freuqencies so that parallel processing will likely not conflict
+        freq_idx = np.arange(1, freq.size)
+        random.shuffle(freq_idx)
         # loop through frequencies
         for iif,i_f in enumerate(freq_idx):
-            sLbl='{:d} {:5d}/{} {:5d} - '.format(ichunk,iif,len(freq_idx),i_f)
+            sLbl='{:5d}/{} - '.format(i_f,len(freq_idx))
             with Timer(sLbl+'Freq_loop:'):
-                filename=preffix+'pyConTurb_'+str(i_f)+'.pkl'
-                if export_sub and os.path.exists(filename):
+                filename = freq_data_filename(preffix, i_f)
+                if write_freq_data and os.path.exists(filename):
                     print('>>> File exists, skipping ', filename)
                     continue
 
@@ -200,15 +207,9 @@ def gen_turb(spat_df, T=600, dt=1, con_tc=None, coh_model='iec',
                     sigma = np.einsum('i,j->ij', all_mags[i_f, :],
                                       all_mags[i_f, :]) * all_coh_mat[:, :, i_f % nf_chunk]
 
-#                 with  Timer(sLbl+'Cholesky:'):
-#                     # get cholesky decomposition of sigma matrix
-#                     cor_mat = np.linalg.cholesky(sigma)
-
                 with  Timer(sLbl+'Cholesky:'):
                     # get cholesky decomposition of sigma matrix
                     cor_mat = scipy.linalg.cholesky(sigma,overwrite_a=True, check_finite=False, lower=True)
-
-
 
                 # if constraints, assign data unc_pha
                 if constrained:
@@ -221,75 +222,87 @@ def gen_turb(spat_df, T=600, dt=1, con_tc=None, coh_model='iec',
                     cor_pha = cor_mat @ unc_pha
 
                     # calculate and save correlated Fourier components
-                    if export_sub:
-                        print('>>> Writing ',filename)
-                        pickle.dump(cor_pha, open(filename,'wb'))
+                    if write_freq_data:
+                        save_freq_data(cor_pha, filename)
                     else:
                         turb_fft[i_f, :] = cor_pha
 
         try:
+            del all_mags
             del all_coh_mat  # free up memory
+            del sigma
+            del cor_pha
+            del unc_pha
         except:
             pass
-    try:
-        del all_mags
-        del sigma
-        del cor_pha
-        del unc_pha
-    except:
-        print('>>> FAILEDTO FREE MEMORY')
-        pass
 
-    if export_sub and ichunk==nchunks:
+    if write_freq_data and not combine_freq_data:
+        return None
 
-        # delay = 2^n *10s + 300s maximum 1h
-        @retry(wait_exponential_multiplier=10*1000, wait_exponential_max=300*1000, stop_max_delay=3600*1000)
-        def Combine():
-            files=glob.glob(preffix+'pyConTurb_*.pkl')
-            print('Combining files, {}/{} present'.format(len(files), freq.size-1))
-            # Load all pickles
-            turb_fft = np.zeros((n_f, n_s), dtype=dtype_complex)
-            for i_f in range(1, freq.size):
-                filename=preffix+'pyConTurb_'+str(i_f)+'.pkl'
-                print(filename)
-                cor_pha = pickle.load(open(filename,'rb'))
-                turb_fft[i_f, :] = cor_pha
-            return turb_fft
+    if write_freq_data and combine_freq_data:
+        turb_fft = load_freq_data(n_f, n_s, preffix, dtype_complex)
 
-        with  Timer('Combine'):
-            turb_fft=Combine()
+    with  Timer('Final'):
+        # convert to time domain and pandas dataframe
+        turb_arr = np.fft.irfft(turb_fft, axis=0, n=n_t) * n_t
+        turb_arr = turb_arr.astype(dtype, copy=False)           
+        turb_df = pd.DataFrame(turb_arr, columns=all_spat_df.columns, index=t)
 
-    if ichunk==nchunks:
-        with  Timer('Final'):
-            # convert to time domain and pandas dataframe
-            turb_arr = np.fft.irfft(turb_fft, axis=0, n=n_t) * n_t
-            turb_arr = turb_arr.astype(dtype, copy=False)           
-            turb_df = pd.DataFrame(turb_arr, columns=all_spat_df.columns, index=t)
+        # return just the desired simulation points
+        turb_df = clean_turb(spat_df, all_spat_df, turb_df)
 
-            # return just the desired simulation points
-            turb_df = clean_turb(spat_df, all_spat_df, turb_df)
+        # add in mean wind speed according to specified profile
+        wsp_profile = get_wsp_values(spat_df, wsp_func, veer_func, **kwargs)
+        turb_df[:] += wsp_profile
 
-            # add in mean wind speed according to specified profile
-            wsp_profile = get_wsp_values(spat_df, wsp_func, veer_func, **kwargs)
-            turb_df[:] += wsp_profile
+    if verbose:
+        print('Turbulence generation complete.')
 
-        if verbose:
-            print('Turbulence generation complete.')
-    else:
-        print('Turbulence generation for sub frequencies complete.')
-        turb_df=None
-
-    if export_sub and ichunk==nchunks:
+    if write_freq_data and combine_freq_data:
         with  Timer('Delete'):
-            try:
-                for i_f in range(1, freq.size):
-                    filename=preffix+'pyConTurb_'+str(i_f)+'.pkl'
-                    os.remove(filename)
-            except:
-                pass
-
+            delete_freq_data(n_f,preffix)
 
     return turb_df
+
+def freq_data_filename(preffix,i_f):
+    return preffix+'pyConTurb_'+str(i_f)+'.pkl'
+
+def save_freq_data(cor_pha,filename):
+    """ Save correlated Fourier coefficients for a given frequency to pickle file"""
+    try:
+        pickle.dump(cor_pha, open(filename,'wb'))
+    except:
+        pass
+
+def load_freq_data(n_f, n_s, preffix, dtype_complex):
+    """ Combine the pickle files generated for each frequency (>0)
+    A retry policy is used just in case files are missing and being generated by another process
+    """
+    # delay = 2^n *10s + 300s maximum 1h
+    @retry(wait_exponential_multiplier=10*1000, wait_exponential_max=300*1000, stop_max_delay=3600*1000)
+    def Combine():
+        files=glob.glob(preffix+'pyConTurb_*.pkl')
+        print('Combining files, {}/{} present'.format(len(files), n_f-1))
+        # Load all pickles
+        turb_fft = np.zeros((n_f, n_s), dtype=dtype_complex)
+        for i_f in range(1, n_f):
+            filename = freq_data_filename(preffix,i_f)
+            turb_fft[i_f, :] = pickle.load(open(filename,'rb'))
+        return turb_fft
+
+    turb_fft=Combine()
+    return turb_fft 
+
+def delete_freq_data(n_f,preffix):
+    """ Delete pickle files that were generated for each frequency. Should only be call upon success. """
+    try:
+        for i_f in range(1, n_f):
+            filename=freq_data_filename(preffix,i_f)
+            os.remove(filename)
+    except:
+        print('[FAIL] to delete all pickles files with preffix: {}'.format(preffix))
+
+
 
 def assign_profile_functions(wsp_func, sig_func, spec_func, interp_data):
     """Assign profile functions based on user inputs"""

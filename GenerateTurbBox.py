@@ -20,12 +20,11 @@ Suffix=''
 if len(sys.argv)>1:
     Case    = sys.argv[1].strip()
     Size    = int(sys.argv[2])
-    ichunk  = int(sys.argv[3])
-    nchunks = int(sys.argv[4])
+    combine_freq_data = sys.argv[3].lower()=='t'
+    write_freq_data = True
 else:
-    ichunk=None
-    nchunks=None
-    Case='B1'
+    write_freq_data = False
+    Case='A1'
     Suffix+='_nochunks'
     Size=1
 
@@ -54,7 +53,7 @@ else:
 print('>>> Case:   {}'.format(Case))
 print('>>> Size:   {}'.format(Size))
 print('>>> Suffix: {}'.format(Suffix))
-print('>>> Chunks: {} {}'.format(ichunk,nchunks))
+print('>>> Write:  {} {}'.format(write_freq_data,combine_freq_data))
 print('>>> y:      {} {} {}'.format(ymin,ymax,ny))
 print('>>> z:      {} {} {}'.format(zmin,zmax,nz))
 h_hub=57;
@@ -108,7 +107,8 @@ if os.path.exists(pkl_file):
     print('>>> NOT GENERATING TURBULENCE, PKL FILE EXIST',pkl_file)
 else:
     with Timer('all:'):
-        sim_turb_df = gen_turb(spat_df, con_tc=con_tc, interp_data=interp_data, wsp_func=wsp_func, veer_func=veer_func, sig_func=sig_func, seed=12, verbose=False, ichunk=ichunk, nchunks=nchunks, preffix='data/'+Case+Suffix+'_', dtype=dtype, **kwargs)
+        sim_turb_df = gen_turb(spat_df, con_tc=con_tc, interp_data=interp_data, wsp_func=wsp_func, veer_func=veer_func, sig_func=sig_func, seed=12, verbose=False,
+                write_freq_data=write_freq_data, combine_freq_data=combine_freq_data, preffix='data/'+Case+Suffix+'_', dtype=dtype, **kwargs)
 
     if sim_turb_df is not None: 
         with Timer('Export:'):

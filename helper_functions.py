@@ -137,3 +137,28 @@ def get_sigma_func(con_tc, plot=False):
 
     return custom_sig
 
+def get_indices(df, vy, vz, atol=None):
+    """ """
+    df_u = df.filter(regex='u_', axis=1)
+    PointID=[]
+    Iu=[]
+    Iv=[]
+    Iw=[]
+    col = df.columns.values.tolist()
+    for y in vy:
+        for z in vz:
+            isim      = np.argmin((df_u.loc['y'].values-y)**2+(df_u.loc['z'].values-z)**2)
+            ysim,zsim = df_u.loc['y'].values[isim], df_u.loc['z'].values[isim]
+            if atol is not None:
+                if np.abs(ysim-y)>atol:
+                    raise Exception('Wrong y')
+                if np.abs(zsim-z)>atol:
+                    raise Exception('Wrong z')
+            colname =     df_u.columns[isim]
+            sPointSim =     colname[1:]
+            iPointSim = int(colname[3:])
+            PointID.append(iPointSim)
+            Iu.append(col.index('u'+sPointSim))
+            Iv.append(col.index('v'+sPointSim))
+            Iw.append(col.index('w'+sPointSim))
+    return PointID, Iu, Iv, Iw
