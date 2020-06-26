@@ -9,5 +9,4 @@
 #SBATCH -o slurm-%x-%j.log                      # Output
 
 python -u GenerateTurbBox.py A1 161 F  &
-python -u GenerateTurbBox.py A1 161 F  &
 python -u GenerateTurbBox.py A1 161 T 
