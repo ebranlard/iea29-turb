@@ -2,9 +2,10 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 # Local 
-import weio
-from pybra.colors import *
-from pybra.figure import *
+try:
+    from pybra.figure import *
+except:
+    pass
 
 
 Layout={'WT1': [473398.8, 6144826, 448, 257]
@@ -104,6 +105,7 @@ ax.set_title('LayoutAbs')
 
 
 # Rotating layout
+xMM = 153.9
 Layout_rot = Layout_rel.copy()
 xref,yref  = Layout_rel['WT1'][0], Layout_rel['WT1'][1]
 theta =-257*np.pi/180
@@ -113,13 +115,15 @@ s=np.sin(theta)
 for k,v in Layout_rot.items():
     x=v[0]-xref
     y=v[1]-yref
-    xrot = x * c  - y *s 
+    xrot = x * c  - y *s  -xMM
     yrot = y * c  + x *s 
     Layout_rot[k] = [xrot, yrot]
 
 ymin = -240
 ymax =  240
-xmin = -240
+# xmin = -240
+# xmin = 153.9
+xmin = 0
 xmax = 1250
 Layout_rot['_In'] = [xmin, 0]
 Layout_rot['_Up'] = [xmin, ymax]
@@ -128,14 +132,14 @@ Layout_rot['_Up'] = [xmin, ymax]
 fig,ax = plot_layout(Layout_rot, rose=False)
 
 
-ax.plot([xmin,xmax],[ymin,ymin],'-.', c=fColrs(2), label='Box extent, y')
-ax.plot([xmin,xmax],[ymax,ymax],'-.', c=fColrs(2))
-ax.plot([xmin,xmin],[ymin,ymax],'--', c=fColrs(1), label='Inlet' )
+ax.plot([xmin,xmax],[ymin,ymin],'-.', c='g', label='Box extent, y')
+ax.plot([xmin,xmax],[ymax,ymax],'-.', c='g')
+ax.plot([xmin,xmin],[ymin,ymax],'--', c='b', label='Box "plane"' )
 
 annotate_dim(ax,Layout_rot['MM'],Layout_rot['WT1'],xOnly=True)
 annotate_dim(ax,Layout_rot['MM'],Layout_rot['WT1'],yOnly=True)
 annotate_dim(ax,Layout_rot['WT1'],Layout_rot['Ref'],xOnly=True)
-annotate_dim(ax,Layout_rot['_In'],Layout_rot['WT1'],xOnly=True)
+# annotate_dim(ax,Layout_rot['_In'],Layout_rot['WT1'],xOnly=True)
 annotate_dim(ax,Layout_rot['_In'],Layout_rot['_Up'],yOnly=True)
 
 
@@ -146,16 +150,12 @@ ax.legend()
 # ax.set_ylim([6144300,6145500])
 ax.set_title('LayoutBox')
 
+
+# Local 
+try:
+    export2pdf()
+except:
+    pass
+
 plt.show()
 
-
-
-# For a rotor diameter of ≈80 m, a maximum chord of ≈3 m, and a wind speed of ≈8 m/s, the rules of thumb for convergence of FAST.Farm would suggest the following discretization requirements for the ambient wind field:
-# •	Spatial resolution around rotor ≤ 3 m
-# •	Time step around rotor ≤ 0.1 s
-# •	Spatial resolution for meandering (away from the rotor) ≤ 8 m
-# •	Time step for meandering (away from the rotor) ≤ 2 s
-# 
-# Based on these results, it would be easiest for us if there was one Mann box with uniform spatial-temporal resolution of ≈3 m and ≈0.1 s.  But we could probably make do (with a bit of data conversion) if you provided two boxes based on the above discretization requirements.  To ensure that it is big enough to capture wake meandering, the larger box (or one large box) should probably be around 6D (480 m) wide and 3D (240 m) tall.
-# 
-# 

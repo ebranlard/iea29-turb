@@ -26,30 +26,16 @@ else:
     write_freq_data = False
     Case='A1'
     Suffix+='_nochunks'
-    Size=1
+    Size=161
+    combine_freq_data = True
 
 # --- Constants and derived params
 Suffix=Suffix+'_'+str(Size)
-if Size==161:
-    ymin,ymax = -240,240
-    zmin,zmax = 3,240
-    ny = 161 # 133 # TODO 133
-    nz = 80  # 66  # TODO 66
-elif Size==133:
-    ymin,ymax = -198,198
-    zmin,zmax = 3,198
-    ny = 133 # 133 # TODO 133
-    nz = 66  # 66  # TODO 66
-elif Size==37:
-    ymin,ymax = -110,1
-    zmin,zmax = 12,96
-    ny = 37 # 133 # TODO 133
-    nz = 29 # 66  # TODO 66
-else:
-    ymin,ymax = -198,198
-    zmin,zmax = 3,198
-    ny = 6 # 133 # TODO 133
-    nz = 5  # 66  # TODO 66
+ymin,ymax = -240,240
+zmin,zmax = 3,240
+ny = 161 
+nz = 80 
+
 print('>>> Case:   {}'.format(Case))
 print('>>> Size:   {}'.format(Size))
 print('>>> Suffix: {}'.format(Suffix))
@@ -79,6 +65,7 @@ sig_func=None
 sig_func=my_sig_func
 wsp_func=None
 # wsp_func=my_sig_func
+veer_func=None
 
 print('Using fitted wind profile:')
 print('>>> alpha:',alpha)
