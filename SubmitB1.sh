@@ -8,5 +8,5 @@
 #SBATCH --mail-type BEGIN,END,FAIL              # Send e-mail when job begins, ends or fails
 #SBATCH -o slurm-%x-%j.log                      # Output
 
-python -u GenerateTurbBox.py B1 161 F  &
-python -u GenerateTurbBox.py B1 161 T 
+python -u GenerateTurbBox.py B1 F  &
+python -u GenerateTurbBox.py B1 T 

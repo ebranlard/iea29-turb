@@ -19,32 +19,27 @@ Suffix=''
 # --- Parameters from command line
 if len(sys.argv)>1:
     Case    = sys.argv[1].strip()
-    Size    = int(sys.argv[2])
     combine_freq_data = sys.argv[3].lower()=='t'
     write_freq_data = True
 else:
     write_freq_data = False
     Case='A1'
     Suffix+='_nochunks'
-    Size=161
-    Size=214
     combine_freq_data = True
 
 # --- Constants and derived params
-Suffix=Suffix+'_'+str(Size)
-if Size==161:
-    ymin,ymax = -240,240
-    zmin,zmax = 3,240
-    ny = 161 
-    nz = 80 
-else:
-    ymin,ymax = -320,320  # -4D, 4D
-    zmin,zmax = 3,480  # 0->6D
-    ny = 214
-    nz = 160
+# ymin,ymax = -240,240
+# zmin,zmax = 3,240
+# ny = 161 
+# nz = 80 
+ymin,ymax = -320,320  # -4D, 4D
+zmin,zmax = 3,480  # 0->6D
+ny = 214
+nz = 160
+
+Suffix=Suffix+'_'+str(ny)'_'+str(nz)
 
 print('>>> Case:   {}'.format(Case))
-print('>>> Size:   {}'.format(Size))
 print('>>> Suffix: {}'.format(Suffix))
 print('>>> Write:  {} {}'.format(write_freq_data,combine_freq_data))
 print('>>> y:      {} {} {}'.format(ymin,ymax,ny))
