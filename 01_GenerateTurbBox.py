@@ -27,14 +27,21 @@ else:
     Case='A1'
     Suffix+='_nochunks'
     Size=161
+    Size=214
     combine_freq_data = True
 
 # --- Constants and derived params
 Suffix=Suffix+'_'+str(Size)
-ymin,ymax = -240,240
-zmin,zmax = 3,240
-ny = 161 
-nz = 80 
+if Size==161:
+    ymin,ymax = -240,240
+    zmin,zmax = 3,240
+    ny = 161 
+    nz = 80 
+else:
+    ymin,ymax = -320,320  # -4D, 4D
+    zmin,zmax = 3,480  # 0->6D
+    ny = 214
+    nz = 160
 
 print('>>> Case:   {}'.format(Case))
 print('>>> Size:   {}'.format(Size))
@@ -57,8 +64,38 @@ print('>>> Pkl : {}Mb'.format(0.07*ny*nz))
 print('>>> T, dt:',T,dt)
 
 # --- Fitting power law and sigma
-alpha,u_ref, my_wsp_func,veer_func = get_wsp_func(con_tc, h_hub, plot   = False)
-my_sig_func                        = get_sigma_func(con_tc, plot = False)
+# alpha,u_ref, my_wsp_func,veer_func = get_wsp_func(con_tc, h_hub, plot   = False)
+# my_sig_func                        = get_sigma_func(con_tc, plot = False)
+if Case=='A1':
+    def my_sig_func(k, y, z, **kwargs):
+        sig = np.zeros(y.shape)
+        sig[k==0] =  0.46577620264919134*np.exp(-0.009459702869284256*z[k==0])+0.5242096170226613
+        sig[k==1] =  0.32501065767141885*np.exp(-0.009059732365499604*z[k==1])+0.4664357892808409
+        sig[k==2] =  0.25265083664918636*np.exp(-0.00816719396912162 *z[k==2])+0.27864558900332614
+        return sig
+    alpha=0.09501
+    u_ref=8.86407 
+elif Case=='A2':
+    def my_sig_func(k, y, z, **kwargs):
+        sig = np.zeros(y.shape)
+        sig[k==0] = 0.8099028667369905 *np.exp(-0.021555344194775908  *z[k==0])+0.4071960755269242
+        sig[k==1] = 135.7599449425806  *np.exp(-3.5109472359675726e-06*z[k==1])+-135.1080431878093
+        sig[k==2] = 0.22495339546333412*np.exp(-0.011140930815265206  *z[k==2])+0.31941416670478984
+        return sig
+    alpha=0.10748
+    u_ref=9.51186
+elif Case=='B1':
+    def my_sig_func(k, y, z, **kwargs):
+        sig = np.zeros(y.shape)
+        sig[k==0] = 0.5115673365356883*np.exp(-0.013331621241907558 *z[k==0])+0.47484654611672855
+        sig[k==1] = 0.3991956202078298*np.exp(-0.011923833640356686 *z[k==1])+0.4190659656311234
+        sig[k==2] = 0.39194178694509046*np.exp(-0.004711856260504405*z[k==2])+0.26768397422947954
+        return sig
+
+    alpha=0.09482
+    u_ref=7.61636
+
+
 
 
 sig_func=None
